@@ -3340,6 +3340,22 @@ class SetAttrBuiltinVariable(BaseBuiltinVariable):
             and name_var.is_python_constant()
         ):
             name = name_var.as_python_constant()
+            if (
+                isinstance(obj, variables.PythonModuleVariable)
+                and obj.needs_slow_setattr()
+            ):
+                unimplemented(
+                    gb_type="setattr() on module with custom __setattr__",
+                    context=f"setattr({obj}, {name}, {val})",
+                    explanation=(
+                        "Dynamo does not yet support tracing setattr() on "
+                        "module objects that override __setattr__."
+                    ),
+                    hints=[
+                        "Move the setattr() call outside the torch.compile region.",
+                        *graph_break_hints.SUPPORTABLE,
+                    ],
+                )
             if obj.is_tensor():
                 from .builder import wrap_fx_proxy
 
