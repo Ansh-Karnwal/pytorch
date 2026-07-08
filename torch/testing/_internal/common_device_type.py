@@ -1636,6 +1636,13 @@ def _has_sufficient_memory(device, size):
     if device_type not in ["cpu", "mps"]:
         raise unittest.SkipTest("Unknown device type")
 
+    if device_type == "mps":
+        gc.collect()
+        torch.mps.synchronize()
+        torch.mps.empty_cache()
+        free_memory = torch._C._mps_maxMemory() - torch.mps.driver_allocated_memory()
+        return free_memory >= size
+
     # CPU
     if not HAS_PSUTIL:
         raise unittest.SkipTest("Need psutil to determine if memory is sufficient")
