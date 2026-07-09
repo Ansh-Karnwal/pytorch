@@ -389,6 +389,37 @@ add_custom_target(
   DEPENDS ${TORCH_GENERATED_CODE}
   )
 
+# Generate torch/profiler/_cupti/_cupti_stubs.py (the CUPTI CUpti_Activity*FieldIds and
+# CUpti_ActivityAttribute enums) from the CUPTI ABI header shipped by nvidia-cuda-cupti.
+# The header is located at configure time so the rule re-runs when it changes; codegen is
+# skipped when no header is present (the torch.profiler._cupti consumer needs CUPTI at
+# runtime anyway).
+if(USE_CUDA AND BUILD_PYTHON)
+  execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c
+      "from tools.setup_helpers.cupti import find_cupti_header as f; p = f(); print(p or '', end='')"
+    WORKING_DIRECTORY "${TORCH_ROOT}"
+    OUTPUT_VARIABLE CUPTI_ACTIVITY_HEADER)
+  if(CUPTI_ACTIVITY_HEADER)
+    # gen_cupti_stubs.py parses the header with the clang python bindings from the
+    # libclang wheel (a build dep), which bundles libclang.so and loads it
+    # automatically -- so there is no need to locate a system libclang.so here.
+    set(CUPTI_STUBS_PY "${TORCH_SRC_DIR}/profiler/_cupti/_cupti_stubs.py")
+    add_custom_command(
+      COMMENT "Generating CUPTI stub module from ${CUPTI_ACTIVITY_HEADER}"
+      OUTPUT "${CUPTI_STUBS_PY}"
+      COMMAND "${Python_EXECUTABLE}" tools/gen_cupti_stubs.py
+        --output "${CUPTI_STUBS_PY}" --header "${CUPTI_ACTIVITY_HEADER}"
+      DEPENDS
+        "${TORCH_ROOT}/tools/gen_cupti_stubs.py"
+        "${CUPTI_ACTIVITY_HEADER}"
+      WORKING_DIRECTORY "${TORCH_ROOT}")
+    add_custom_target(generate-cupti-stubs ALL DEPENDS "${CUPTI_STUBS_PY}")
+  else()
+    message(STATUS "CUPTI header not found; skipping CUPTI stub codegen")
+  endif()
+endif()
+
 set(TORCH_SRCS ${GENERATED_CXX_TORCH})
 list(APPEND TORCH_SRCS ${GENERATED_H_TORCH})
 list(APPEND LIBTORCH_CMAKE_SRCS "")
